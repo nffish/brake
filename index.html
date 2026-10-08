@@ -32,6 +32,11 @@ header { display: flex; align-items: flex-end; justify-content: space-between; g
 .brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(32px, 6vw, 48px); line-height: 1; color: var(--gold); letter-spacing: 2px; }
 .sub { font-size: 13px; color: var(--muted); }
+.tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.global { display: flex; align-items: baseline; gap: 8px; border: 2px solid var(--red); padding: 6px 10px; font-size: 12px; color: var(--paper); }
+.global b { font: 14px var(--pixel); color: var(--red); font-variant-numeric: tabular-nums; }
+.global.bump b { animation: bump .6s steps(4); }
+@keyframes bump { 50% { color: #fff; } }
 .icon-btn { background: var(--panel); color: var(--paper); border: 2px solid var(--line); font: 10px var(--pixel); padding: 8px 10px; cursor: pointer; }
 .icon-btn:focus-visible, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
@@ -115,7 +120,10 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
       <h1>第四脚</h1>
       <span class="sub">尊贵 V8000 · 百万级旗舰 MPV 试驾体验</span>
     </div>
-    <button class="icon-btn" id="mute" type="button" aria-pressed="false">SOUND ON</button>
+    <div class="tools">
+      <span class="global" id="globalBox" title="所有玩家的踏板断裂次数合计">全服累计断裂 <b id="globalBreaks">—</b> 次</span>
+      <button class="icon-btn" id="mute" type="button" aria-pressed="false">SOUND ON</button>
+    </div>
   </header>
 
   <div class="hud" aria-live="off">
@@ -268,6 +276,25 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
     $('brake').classList.toggle('on', S.pressing && !S.broken);
   }
 
+  // ---------- global counter (all players) ----------
+  const COUNTER = 'https://abacus.jasoncameron.dev';
+  const COUNTER_KEY = 'nffish-brake/breaks';
+  let globalBreaks = null;
+  function setGlobal(n, bump) {
+    if (typeof n !== 'number') return;
+    globalBreaks = n; $('globalBreaks').textContent = n.toLocaleString('zh-CN');
+    if (bump) { const b = $('globalBox'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+  }
+  function loadGlobal() {
+    fetch(`${COUNTER}/get/${COUNTER_KEY}`).then(r => r.ok ? r.json() : null).then(d => d && setGlobal(d.value)).catch(() => {});
+  }
+  function countBreak() {
+    if (globalBreaks != null) setGlobal(globalBreaks + 1, true);
+    fetch(`${COUNTER}/hit/${COUNTER_KEY}`).then(r => r.ok ? r.json() : null).then(d => d && setGlobal(d.value)).catch(() => {});
+  }
+  loadGlobal();
+  setInterval(() => { if (!document.hidden && S.phase !== 'drive' && S.phase !== 'broken') loadGlobal(); }, 30000);
+
   // ---------- game logic ----------
   function spawn() {
     const ghost = S.stops >= 1 && Math.random() < 0.45;
@@ -304,6 +331,7 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
   }
 
   function breakPedal() {
+    countBreak();
     S.broken = true; S.phase = 'broken'; S.slowT = 1.4; S.shake = 8; S.stock = -10; S.cruise = S.v;
     noise(0.12, 0.7, 4000); noise(0.35, 0.5, 300);
     renderSlots();
@@ -435,6 +463,7 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
         <p>${desc}</p>
         ${k === 'gentle' ? '<span class="badge">解锁成就：真正的车主</span>' : ''}
         <div class="stats">
+          <div><span class="k">全服累计断裂</span><span class="v">${globalBreaks == null ? '—' : globalBreaks.toLocaleString('zh-CN') + ' 次'}</span></div>
           <div><span class="k">踏板断在</span><span class="v">${S.broken ? '第 ' + S.heavy + ' 脚' : '未断'}</span></div>
           <div><span class="k">安全停车</span><span class="v">${S.stops} 次</span></div>
           <div><span class="k">平均停车距离</span><span class="v">${avg}</span></div>

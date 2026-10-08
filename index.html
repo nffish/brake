@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="像素风娱乐小游戏：驾驶虚构的百万级 MPV，看踏板能撑过几脚重刹。">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>第四脚</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=ZCOOL+QingKe+HuangYou&display=swap">
+<style>
+/* Layout: one arcade cabinet column. HUD strip, 16:9 pixel screen, big pedal button, disclaimer. Single dark look by choice. */
+:root {
+  color-scheme: dark;
+  --ink: #131119;
+  --panel: #1e1a27;
+  --line: #3a3348;
+  --paper: #efe6d2;
+  --muted: #9a91a8;
+  --gold: #d9b45a;
+  --red: #e2463c;
+  --down: #3fbf6a; /* A股：绿跌 */
+  --pixel: "Press Start 2P", ui-monospace, Menlo, monospace;
+  --display: "ZCOOL QingKe HuangYou", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+html, body { height: 100%; }
+body { background: var(--ink); color: var(--paper); font-family: var(--body); }
+.wrap { max-width: 960px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 28px; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(32px, 6vw, 48px); line-height: 1; color: var(--gold); letter-spacing: 2px; }
+.sub { font-size: 13px; color: var(--muted); }
+.icon-btn { background: var(--panel); color: var(--paper); border: 2px solid var(--line); font: 10px var(--pixel); padding: 8px 10px; cursor: pointer; }
+.icon-btn:focus-visible, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; background: var(--line); border: 2px solid var(--line); }
+.hud > div { background: var(--panel); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hud .k { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+.hud .v { font: 14px var(--pixel); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud .v small { font-size: 8px; color: var(--muted); }
+.slots { display: flex; gap: 4px; }
+.slot { width: 14px; height: 14px; border: 2px solid var(--line); background: var(--ink); }
+.slot.used { background: var(--gold); border-color: var(--gold); }
+.slot.broken { background: var(--red); border-color: var(--red); }
+#hudStock.down { color: var(--down); }
+#hudStock.up { color: var(--red); }
+
+.stage { position: relative; border: 4px solid var(--line); background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; image-rendering: pixelated; image-rendering: crisp-edges; }
+.ahead { position: absolute; right: 8px; top: 8px; font-size: 12px; background: rgba(19,17,25,.8); border: 2px solid var(--line); padding: 4px 8px; }
+.ahead[data-alert="1"] { border-color: var(--red); color: var(--red); }
+
+#toasts { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; width: 70%; }
+.toast { background: rgba(19,17,25,.88); border: 2px solid var(--gold); color: var(--gold); font-size: 13px; padding: 5px 10px; text-align: center; animation: toast 2.4s steps(12) forwards; }
+.toast.alert { border-color: var(--red); color: #fff; background: var(--red); font-size: 16px; font-weight: 700; }
+.toast.info { border-color: var(--muted); color: var(--paper); }
+@keyframes toast { 0% { opacity: 0; transform: translateY(6px); } 10% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+.overlay { position: absolute; inset: 0; background: rgba(13,12,18,.9); display: flex; align-items: center; justify-content: center; padding: 12px; overflow-y: auto; }
+.card { width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; max-height: 100%; }
+.card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(28px, 5vw, 40px); color: var(--gold); text-wrap: balance; }
+.card h2.bad { color: var(--red); }
+.card p { margin: 0; line-height: 1.6; font-size: 14px; color: var(--paper); }
+.card .hint { color: var(--muted); font-size: 12px; }
+kbd { font: 9px var(--pixel); background: var(--panel); border: 2px solid var(--line); padding: 2px 5px; }
+.btn { background: var(--gold); color: var(--ink); border: none; font: 12px var(--pixel); padding: 12px 16px; cursor: pointer; box-shadow: 0 4px 0 #8c6f2c; align-self: flex-start; }
+.btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8c6f2c; }
+.btn.ghost { background: var(--panel); color: var(--paper); box-shadow: 0 4px 0 var(--line); border: 2px solid var(--line); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 2px; background: var(--line); border: 2px solid var(--line); }
+.stats div { background: var(--panel); padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.stats .k { font-size: 11px; color: var(--muted); }
+.stats .v { font: 11px var(--pixel); }
+.memo { border: 2px dashed var(--muted); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: #fbf7ee; color: #2a2533; }
+.memo .head { font-size: 12px; letter-spacing: 2px; color: #6b6377; }
+.memo p { color: #2a2533; font-size: 13px; opacity: 0; animation: reveal .01s forwards; }
+@keyframes reveal { to { opacity: 1; } }
+.memo .btn { font-size: 10px; padding: 8px 12px; }
+.board { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.board div { display: flex; justify-content: space-between; background: var(--panel); padding: 4px 8px; }
+.board div.me { color: var(--gold); }
+.badge { border: 2px solid var(--gold); color: var(--gold); padding: 6px 10px; font-size: 13px; align-self: flex-start; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.controls { display: flex; flex-direction: column; gap: 10px; }
+#brake { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--panel); color: var(--paper); border: 4px solid var(--line); cursor: pointer; touch-action: none; position: relative; overflow: hidden; font-family: var(--body); font-size: 15px; text-align: left; }
+#brake .fill { position: absolute; left: 0; bottom: 0; top: 0; width: 0%; background: rgba(226,70,60,.28); pointer-events: none; }
+#brake .pedal { width: 34px; height: 34px; flex: none; position: relative; image-rendering: pixelated; }
+#brake .pedal i { position: absolute; display: block; background: var(--paper); }
+#brake.on { border-color: var(--red); }
+#brake.dead { border-color: var(--red); color: var(--red); cursor: not-allowed; }
+#brake .lbl { display: flex; flex-direction: column; gap: 4px; position: relative; }
+#brake .lbl small { color: var(--muted); font-size: 12px; }
+#emerg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+#emerg button { background: var(--red); color: #fff; border: none; padding: 12px 8px; font-family: var(--body); font-size: 14px; cursor: pointer; box-shadow: 0 4px 0 #8b2a23; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+#emerg button kbd { color: var(--paper); }
+#emerg button.on { background: var(--gold); color: var(--ink); box-shadow: 0 4px 0 #8c6f2c; }
+footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+@media (max-width: 560px) {
+  .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #emerg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toast { font-size: 11px; }
+  .ahead { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { animation-duration: 3s; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>第四脚</h1>
+      <span class="sub">尊贵 V8000 · 百万级旗舰 MPV 试驾体验</span>
+    </div>
+    <button class="icon-btn" id="mute" type="button" aria-pressed="false">SOUND ON</button>
+  </header>
+
+  <div class="hud" aria-live="off">
+    <div><span class="k">车速</span><span class="v" id="hudSpeed">000 <small>KM/H</small></span></div>
+    <div><span class="k">重刹次数</span><span class="slots" id="hudFeet"></span></div>
+    <div><span class="k">安全停车</span><span class="v" id="hudStops">0</span></div>
+    <div><span class="k">某汽车 600XXX</span><span class="v up" id="hudStock">+1.20%</span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="game" width="480" height="270" aria-label="游戏画面"></canvas>
+    <div class="ahead" id="ahead">前方：畅通</div>
+    <div id="toasts"></div>
+
+    <div class="overlay" id="intro">
+      <div class="card">
+        <h2>网传撑不过第四脚</h2>
+        <p>欢迎试驾尊贵 V8000。星空顶、零重力座椅、香氛系统一应俱全。路上会遇到红灯、行人、急停的前车，请在停止线前把车停住。</p>
+        <p>按住 <kbd>空格</kbd> 或下方踏板踩刹车，按得越久踩得越深。踩深超过 75% 算一次<b>重刹</b>，踏板支架会记住每一次。</p>
+        <p class="hint">提示：轻踩更省支架，但停车距离更长。路边偶尔会有人突然冒出来。</p>
+        <button class="btn" id="startBtn" type="button">开始试驾</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="result" hidden></div>
+  </div>
+
+  <div class="controls">
+    <button id="brake" type="button" aria-label="踩刹车（按住）">
+      <span class="fill" id="brakeFill"></span>
+      <span class="pedal" aria-hidden="true">
+        <i style="left:14px;top:0;width:6px;height:22px"></i>
+        <i style="left:4px;top:22px;width:26px;height:8px"></i>
+      </span>
+      <span class="lbl"><span id="brakeText">按住踩刹车</span><small id="brakeSub">键盘：空格 / ↓</small></span>
+    </button>
+    <div id="emerg" hidden>
+      <button type="button" data-act="hand">电子手刹<kbd>1</kbd></button>
+      <button type="button" data-act="rail">蹭护栏<kbd>2</kbd></button>
+      <button type="button" data-act="park">挂 P 挡<kbd>3</kbd></button>
+      <button type="button" data-act="shout">开窗大喊<kbd>4</kbd></button>
+    </div>
+  </div>
+
+  <footer>本游戏为娱乐创作。车型、品牌、股票与情节均为虚构，与任何真实产品无关。真实事件请以官方调查结论为准。开车请系好安全带。</footer>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  const W = 480, H = 270, SCALE = 1.9, CAR_SX = 170, GROUND = 214;
+  const $ = id => document.getElementById(id);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const LUX = ['星空顶已为您点亮', '后排零重力座椅：按摩中', '香氛系统：冷杉与雪松', '静谧座舱 · 车内仅 28 分贝',
+    '百万级旗舰安全守护中', '副驾已为您调至最舒适角度', '车载冰箱：香槟已冰镇'];
+  const SHOUT = ['让一让！', '这车一百多万！', '我是车主！！', '刹车呢？？', '有没有人管管！'];
+  const PARK = ['车速过高，换挡请求已拒绝', '检测到异常操作，已为您记录', '建议联系您的专属管家', '您的反馈对我们很重要'];
+  const NAMES = { light: '红灯', ped: '行人', cat: '猫', car: '前车急刹', ghost: '行人', barrier: '防撞桶' };
+
+  // skyline
+  const city = [];
+  for (let x = 0; x < 640; ) { const w = 14 + Math.floor(Math.random() * 26); city.push({ x, w, h: 20 + Math.floor(Math.random() * 50) }); x += w + 2; }
+  const stars = Array.from({ length: 40 }, () => ({ x: Math.random() * W, y: Math.random() * 90 }));
+
+  const S = {};
+  function reset() {
+    Object.assign(S, {
+      phase: 'intro', x: 0, v: 22, depth: 0, pressing: false, pressCounted: false,
+      heavy: 0, breakAt: Math.random() < 0.3 ? 3 : 4, stops: 0, hz: null, broken: false,
+      handDelay: 0, handOn: false, rail: false, cost: 0, stock: 1.2, slowT: 0, t: 0, shake: 0,
+      parts: [], ending: null, gaps: [], parkTries: 0, cruise: 0, lastLux: -9, used: new Set(), endTimer: 0
+    });
+  }
+  reset();
+
+  // ---------- audio ----------
+  let AC = null, eng, engGain, sqGain, sq, muted = false;
+  function initAudio() {
+    if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      eng = AC.createOscillator(); eng.type = 'sawtooth';
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380;
+      engGain = AC.createGain(); engGain.gain.value = 0;
+      eng.connect(lp).connect(engGain).connect(AC.destination); eng.start();
+      sq = AC.createOscillator(); sq.type = 'triangle'; sq.frequency.value = 1900;
+      sqGain = AC.createGain(); sqGain.gain.value = 0;
+      sq.connect(sqGain).connect(AC.destination); sq.start();
+    } catch (e) { AC = null; }
+  }
+  function noise(dur, gain, freq) {
+    if (!AC || muted) return;
+    const len = Math.floor(AC.sampleRate * dur), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = AC.createBufferSource(); src.buffer = buf;
+    const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
+    const g = AC.createGain(); g.gain.value = gain;
+    src.connect(f).connect(g).connect(AC.destination); src.start();
+  }
+  function beep(freq, dur, gain = 0.06) {
+    if (!AC || muted) return;
+    const o = AC.createOscillator(), g = AC.createGain(); o.type = 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(gain, AC.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+    o.connect(g).connect(AC.destination); o.start(); o.stop(AC.currentTime + dur);
+  }
+  function updateAudio() {
+    if (!AC) return;
+    const now = AC.currentTime, driving = S.phase === 'drive' || S.phase === 'broken';
+    engGain.gain.setTargetAtTime(muted || !driving ? 0 : 0.03 + S.v * 0.0008, now, 0.1);
+    eng.frequency.setTargetAtTime(32 + S.v * 2.6, now, 0.1);
+    const squeal = !muted && !S.broken && S.depth > 0.55 && S.v > 4 ? 0.018 * S.depth : 0;
+    sqGain.gain.setTargetAtTime(squeal, now, 0.05);
+    sq.frequency.setTargetAtTime(1800 + Math.sin(S.t * 40) * 120, now, 0.02);
+  }
+  $('mute').addEventListener('click', () => {
+    muted = !muted; $('mute').textContent = muted ? 'SOUND OFF' : 'SOUND ON'; $('mute').setAttribute('aria-pressed', muted);
+  });
+
+  // ---------- UI helpers ----------
+  function toast(text, kind = '') {
+    const el = document.createElement('div'); el.className = 'toast ' + kind; el.textContent = text;
+    const box = $('toasts'); box.appendChild(el);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => el.remove(), 2500);
+  }
+  function renderSlots() {
+    const box = $('hudFeet'); box.innerHTML = '';
+    for (let i = 1; i <= 4; i++) {
+      const s = document.createElement('span'); s.className = 'slot';
+      if (S.broken && i === S.heavy) s.classList.add('broken'); else if (i <= S.heavy) s.classList.add('used');
+      box.appendChild(s);
+    }
+  }
+  function fmtStock(p) { return (p >= 0 ? '+' : '') + p.toFixed(2) + '%'; }
+  function updateHud() {
+    $('hudSpeed').innerHTML = String(Math.round(S.v * 3.6)).padStart(3, '0') + ' <small>KM/H</small>';
+    $('hudStops').textContent = S.stops;
+    const st = $('hudStock'); st.textContent = S.stock <= -10 ? '-10.00% 跌停' : fmtStock(S.stock);
+    st.className = 'v ' + (S.stock < 0 ? 'down' : 'up');
+    const a = $('ahead'), hz = S.hz;
+    if (hz && hz.state === 'active' && hz.revealed) {
+      const gap = Math.max(0, hz.x - S.x);
+      a.textContent = `前方：${NAMES[hz.type]} · ${Math.round(gap)}m`; a.dataset.alert = gap < 80 ? '1' : '0';
+    } else { a.textContent = '前方：畅通'; a.dataset.alert = '0'; }
+    $('brakeFill').style.width = (S.depth * 100).toFixed(0) + '%';
+    $('brake').classList.toggle('on', S.pressing && !S.broken);
+  }
+
+  // ---------- game logic ----------
+  function spawn() {
+    const ghost = S.stops >= 1 && Math.random() < 0.45;
+    const type = ghost ? 'ghost' : pick(['light', 'ped', 'cat', 'car']);
+    S.hz = { type, x: S.x + (ghost ? rand(240, 300) : rand(170, 250)), state: 'active', t: 0, revealed: !ghost, vx: 0 };
+  }
+  function target() { return Math.min(36, 22 + S.stops * 1.6); }
+
+  function start() {
+    reset(); S.phase = 'drive'; spawn();
+    $('intro').hidden = true; $('result').hidden = true; $('emerg').hidden = true;
+    $('emerg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    $('brake').classList.remove('dead'); $('brakeText').textContent = '按住踩刹车'; $('brakeSub').textContent = '键盘：空格 / ↓';
+    renderSlots(); initAudio();
+  }
+
+  function setPressing(on) {
+    if (on && !S.pressing) {
+      S.pressCounted = false;
+      if (S.phase === 'drive' && S.t - S.lastLux > 2.5 && S.v > 3) { toast(pick(LUX)); S.lastLux = S.t; }
+      if (S.broken) toast('踏板已脱离，踩了也没用', 'info');
+    }
+    S.pressing = on;
+  }
+
+  function onHeavy() {
+    S.heavy++; renderSlots();
+    S.stock -= rand(1.2, 2.6);
+    for (let i = 0; i < 14; i++) S.parts.push({ wx: S.x - 60 / SCALE + rand(-1, 1), y: GROUND + 6, vx: rand(-20, -4), vy: rand(-18, -4), life: rand(0.6, 1.2), c: '#cfc8d8', s: 3 });
+    if (S.heavy >= S.breakAt) { breakPedal(); return; }
+    toast(`重刹 · 第 ${S.heavy} 脚`, 'info');
+    if (S.heavy === S.breakAt - 1) setTimeout(() => toast('咔……（脚下好像有什么声音）', 'info'), 500);
+    beep(180, 0.08, 0.04);
+  }
+
+  function breakPedal() {
+    S.broken = true; S.phase = 'broken'; S.slowT = 1.4; S.shake = 8; S.stock = -10; S.cruise = S.v;
+    noise(0.12, 0.7, 4000); noise(0.35, 0.5, 300);
+    renderSlots();
+    toast(`第 ${S.heavy} 脚：踏板支架断裂`, 'alert');
+    setTimeout(() => toast(`定速巡航将继续为您保持 ${Math.round(S.cruise * 3.6)} km/h`), 900);
+    const hz = S.hz;
+    if (hz && hz.state === 'active' && hz.x - S.x < 220) {
+      hz.type = 'barrier'; hz.revealed = true;
+      setTimeout(() => toast('为照顾您的心理健康，前方障碍已替换为防撞桶', 'info'), 1800);
+    } else {
+      S.hz = { type: 'barrier', x: S.x + Math.max(150, S.v * 6.5), state: 'active', t: 0, revealed: true, vx: 0 };
+    }
+    // bracket debris
+    for (let i = 0; i < 10; i++) S.parts.push({ cam: true, x: 66, y: 16, vx: rand(-30, 30), vy: rand(-40, -5), life: 1.4, c: '#8a8f99', s: 2 });
+    $('emerg').hidden = false;
+    $('brake').classList.add('dead'); $('brakeText').textContent = '踏板已脱离'; $('brakeSub').textContent = '请使用下方应急操作（1–4）';
+  }
+
+  function emergency(act) {
+    if (S.phase !== 'broken') return;
+    S.used.add(act);
+    const btn = $('emerg').querySelector(`[data-act="${act}"]`);
+    if (act === 'hand') {
+      if (S.handOn || S.handDelay > 0) return;
+      S.handDelay = 1.0; toast('电子手刹启动中，请稍候…', 'info'); btn.classList.add('on');
+    } else if (act === 'rail') {
+      S.rail = !S.rail; btn.classList.toggle('on', S.rail);
+      toast(S.rail ? '车身正在与护栏亲密接触' : '已离开护栏', S.rail ? '' : 'info');
+    } else if (act === 'park') {
+      toast(PARK[Math.min(S.parkTries++, PARK.length - 1)], 'info'); beep(220, 0.15);
+    } else if (act === 'shout') {
+      toast('「' + pick(SHOUT) + '」'); beep(520, 0.1);
+    }
+  }
+
+  function endGame(kind) {
+    if (S.ending) return;
+    S.ending = kind; S.phase = 'end'; S.pressing = false;
+    if (kind === 'crash') {
+      S.shake = 12; noise(0.9, 0.6, 900);
+      for (let i = 0; i < 30; i++) S.parts.push({ wx: S.x + 1, y: GROUND - rand(0, 30), vx: rand(-10, 25), vy: rand(-60, -10), life: rand(0.8, 1.6), c: pick(['#f08a24', '#f5f1e8', '#d9b45a']), s: 3, g: 1 });
+    }
+    S.endTimer = 1.3;
+  }
+
+  function step(dt) {
+    S.t += dt;
+    if (S.pressing) S.depth = Math.min(1, S.depth + dt * 2.2); else S.depth = Math.max(0, S.depth - dt * 5);
+    if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 14);
+
+    if (S.phase === 'drive' || S.phase === 'broken') {
+      let a;
+      if (!S.broken) {
+        if (S.pressing && S.depth > 0.75 && !S.pressCounted && S.v > 8) { S.pressCounted = true; onHeavy(); }
+      }
+      if (!S.broken) {
+        a = S.depth > 0.02 ? -(S.depth * 9.5 + 0.2) : (S.v < target() ? 2.4 : -0.4);
+      } else {
+        if (S.handDelay > 0) { S.handDelay -= dt; if (S.handDelay <= 0) { S.handOn = true; toast('电子手刹介入（温柔模式）'); } }
+        const dec = (S.handOn ? 3.0 : 0) + (S.rail ? 5.2 : 0);
+        a = dec > 0 ? -dec : (S.v < S.cruise ? 1 : 0);
+        if (S.rail) {
+          S.cost += dt * (9000 + S.v * 500);
+          if (S.v > 1 && Math.random() < 0.7) S.parts.push({ wx: S.x - rand(5, 35), y: GROUND + 12, vx: rand(-30, -8), vy: rand(-30, -5), life: rand(0.2, 0.5), c: pick(['#ffd34d', '#ff8a2a', '#fff']), s: 2, g: 1 });
+        }
+      }
+      S.v = Math.max(0, S.v + a * dt);
+      S.x += S.v * dt;
+
+      const hz = S.hz;
+      if (hz) {
+        hz.t += dt;
+        const gap = hz.x - S.x;
+        if (hz.state === 'active') {
+          if (!hz.revealed && gap < S.v * S.v / 12 + S.v * 0.5 + 6) { hz.revealed = true; toast('有人从路边冒出来了！', 'alert'); beep(880, 0.12); }
+          if (gap < 0) { endGame(hz.type === 'barrier' ? 'crash' : 'violation'); S.x = hz.x; S.v = 0; }
+          else if (S.v < 0.3 && hz.revealed && gap < 70) {
+            if (hz.type === 'barrier') endGame('survived');
+            else {
+              hz.state = 'clearing'; hz.t = 0; S.stops++; S.gaps.push(gap); S.stock += 0.3;
+              toast(gap < 3 ? `完美停车 · 距停止线 ${gap.toFixed(1)}m` : gap < 12 ? `停得不错 · ${gap.toFixed(1)}m` : `停得有点早 · ${gap.toFixed(0)}m`, 'info');
+              beep(660, 0.08); setTimeout(() => beep(990, 0.1), 90);
+              if (S.stops >= 8) endGame(S.heavy === 0 ? 'gentle' : 'lucky');
+            }
+          }
+        } else if (hz.state === 'clearing') {
+          if (hz.type === 'car') { hz.vx += 7 * dt; hz.x += hz.vx * dt; }
+          const off = hz.type === 'car' ? gap > 200 : (gap < -30 || hz.t > 10);
+          if (off) S.hz = null;
+        }
+      }
+      if (!S.hz && S.phase === 'drive') spawn();
+    } else if (S.phase === 'end') {
+      S.v = Math.max(0, S.v - 12 * dt); S.x += S.v * dt;
+      if (S.endTimer > 0) { S.endTimer -= dt; if (S.endTimer <= 0) showResult(); }
+    }
+
+    for (const p of S.parts) {
+      p.life -= dt;
+      if (p.cam) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 120 * dt; if (p.y > 58) { p.y = 58; p.vx *= 0.5; p.vy = 0; } continue; }
+      p.wx += p.vx * dt / SCALE * 3; p.y += p.vy * dt; if (p.g) p.vy += 80 * dt;
+    }
+    S.parts = S.parts.filter(p => p.life > 0 || (p.cam && S.broken));
+  }
+
+  // ---------- results ----------
+  function showResult() {
+    const k = S.ending, el = $('result');
+    const hz = S.hz;
+    const titles = {
+      violation: ['这次不怪踏板', 'bad'], crash: ['撞上了防撞桶', 'bad'], survived: ['活着停下来了', ''],
+      gentle: ['温柔车主', ''], lucky: ['踏板撑住了', '']
+    };
+    const viol = { light: '你闯了红灯。扣 6 分，罚款 200 元。', ped: '你冲过了斑马线。行人以专业运动员的身手躲开了。', ghost: '你冲过了停止线。那位行人以专业运动员的身手躲开了。', cat: '你冲过了停止线。猫：喵？', car: '你追尾了前车。对方车主下车，和你交换了联系方式。' };
+    const used = [...S.used].map(a => ({ hand: '电子手刹', rail: '护栏', park: '挂挡', shout: '大喊' })[a]);
+    const desc = {
+      violation: (viol[hz && hz.type] || '你冲过了停止线。') + ' 刹车距离不够，下次早点踩。',
+      crash: '气囊已弹出。星空顶依然璀璨，香氛系统仍在工作。',
+      survived: `你靠${used.filter(u => u === '电子手刹' || u === '护栏').join('和') || '运气'}，让一台百万级 MPV 停在了防撞桶前。`,
+      gentle: '8 次停车，一脚重刹都没踩。原来豪车要这样开：别用力。',
+      lucky: `重刹 ${S.heavy} 次，支架依然坚挺。建议顺路去买张彩票。`
+    }[k];
+    const avg = S.gaps.length ? (S.gaps.reduce((a, b) => a + b, 0) / S.gaps.length).toFixed(1) + 'm' : '—';
+    const board = [['试驾员 A', 3], ['试驾员 B', 4], ['试驾员 C', 4], ['你', S.broken ? S.heavy : null]]
+      .sort((a, b) => (a[1] ?? 99) - (b[1] ?? 99));
+    el.innerHTML = `
+      <div class="card">
+        <h2 class="${titles[k][1]}">${titles[k][0]}</h2>
+        <p>${desc}</p>
+        ${k === 'gentle' ? '<span class="badge">解锁成就：真正的车主</span>' : ''}
+        <div class="stats">
+          <div><span class="k">踏板断在</span><span class="v">${S.broken ? '第 ' + S.heavy + ' 脚' : '未断'}</span></div>
+          <div><span class="k">安全停车</span><span class="v">${S.stops} 次</span></div>
+          <div><span class="k">平均停车距离</span><span class="v">${avg}</span></div>
+          <div><span class="k">钣金费</span><span class="v">¥${Math.round(S.cost).toLocaleString('zh-CN')}</span></div>
+          <div><span class="k">某汽车</span><span class="v" style="color:var(${S.stock < 0 ? '--down' : '--red'})">${S.stock <= -10 ? '跌停' : fmtStock(S.stock)}</span></div>
+        </div>
+        ${S.broken ? `
+        <div class="memo" id="memo">
+          <span class="head">厂方回应</span>
+          <p style="animation-delay:.4s">我们尚未接到涉及刹车踏板的相关反馈。</p>
+          <p style="animation-delay:1.3s">车辆交付周期一切正常。</p>
+          <p style="animation-delay:2.2s">我们正在多方测试中，有结果后会第一时间说明。</p>
+          <div class="row" style="opacity:0;animation:reveal .01s 2.9s forwards">
+            <button class="btn" type="button" data-ok>好的</button>
+            <button class="btn ghost" type="button" data-ok>好的（大声）</button>
+          </div>
+        </div>
+        <div class="board">${board.map(r => `<div class="${r[0] === '你' ? 'me' : ''}"><span>${r[0]}</span><span>${r[1] ? '第 ' + r[1] + ' 脚' : '未断'}</span></div>`).join('')}</div>` : ''}
+        <div class="row"><button class="btn" type="button" id="againBtn">再试一次</button></div>
+      </div>`;
+    el.hidden = false;
+    el.querySelectorAll('[data-ok]').forEach(b => b.addEventListener('click', () => {
+      b.parentElement.innerHTML = '<span style="font-size:12px;color:#6b6377">感谢您的理解与支持。</span>';
+    }));
+    $('againBtn').addEventListener('click', start);
+    $('againBtn').focus({ preventScroll: true });
+  }
+
+  // ---------- drawing ----------
+  const sxOf = wx => Math.round(CAR_SX + (wx - S.x) * SCALE);
+  function R(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); }
+
+  function drawBackground() {
+    const bands = ['#1b1430', '#25183a', '#341d45', '#4a2348', '#6b2d48', '#93404a', '#b8574a'];
+    const bh = 176 / bands.length;
+    bands.forEach((c, i) => R(0, Math.floor(i * bh), W, Math.ceil(bh) + 1, c));
+    for (const s of stars) R(s.x, s.y, 1, 1, (Math.floor(S.t * 2 + s.x) % 7 === 0) ? '#6a5a80' : '#cdbfe0');
+    R(380, 30, 14, 14, '#efe6d2'); R(384, 30, 10, 10, '#1b1430'); // moon
+    const off = (S.x * SCALE * 0.15) % 640;
+    for (const b of city) for (const k of [0, 640]) {
+      const x = b.x - off + k; if (x > W || x + b.w < 0) continue;
+      R(x, 176 - b.h, b.w, b.h, '#20182c');
+      for (let wy = 176 - b.h + 4; wy < 170; wy += 6) for (let wx = 3; wx < b.w - 3; wx += 5)
+        if (((b.x + wx) * 7 + wy * 3) % 11 < 3) R(x + wx, wy, 2, 2, '#e6b85a');
+    }
+    // road
+    R(0, 176, W, 4, '#4b4656'); R(0, 180, W, 60, '#2a2731');
+    const d = Math.round(S.x * SCALE) % 40;
+    for (let x = -d; x < W; x += 40) R(x, 199, 20, 2, '#d9d2c3');
+    R(0, 238, W, 32, '#17151d');
+    // distance posts
+    const first = Math.floor((S.x - 100) / 50) * 50;
+    ctx.font = '8px "Press Start 2P", monospace'; ctx.textBaseline = 'top';
+    for (let m = first; m < S.x + 200; m += 50) {
+      if (m < 0) continue;
+      const x = sxOf(m); R(x, 168, 2, 10, '#efe6d2'); R(x - 6, 160, 16, 9, '#3a5a3a');
+      ctx.fillStyle = '#efe6d2'; ctx.fillText(String(m % 1000).padStart(3, '0').slice(0, 3), x - 5, 161);
+    }
+  }
+
+  function drawGuardrail() {
+    const d = Math.round(S.x * SCALE) % 24;
+    for (let x = -d; x < W; x += 24) R(x, 240, 3, 12, '#7b7787');
+    R(0, 241, W, 4, '#a8a4b4'); R(0, 245, W, 1, '#55515f');
+  }
+
+  function drawCar() {
+    let sx = CAR_SX, gy = GROUND + (S.rail ? 12 : 0);
+    const dive = Math.round(S.broken ? 0 : S.depth * 2);
+    const bob = S.v > 1 ? (Math.floor(S.t * 12) % 2) : 0;
+    const by = gy - bob;
+    // headlight beam
+    ctx.fillStyle = 'rgba(255,240,180,0.10)';
+    ctx.beginPath(); ctx.moveTo(sx, by - 22 + dive); ctx.lineTo(sx + 90, by - 4); ctx.lineTo(sx + 90, by + 10); ctx.closePath(); ctx.fill();
+    // body
+    R(sx - 78, by - 30, 78, 22, '#16151b');
+    R(sx - 72, by - 42 + dive, 58, 12, '#16151b');
+    for (let i = 0; i < 6; i++) R(sx - 14 + i * 2, by - 42 + i * 2 + dive, 2, 12, '#16151b');
+    R(sx - 78, by - 34, 6, 4, '#16151b');
+    // windows
+    R(sx - 68, by - 39 + dive, 15, 7, '#3d4e6e'); R(sx - 51, by - 39 + dive, 15, 7, '#3d4e6e'); R(sx - 34, by - 39 + dive, 14, 7, '#3d4e6e');
+    R(sx - 68, by - 39 + dive, 15, 1, '#7c8fb3'); R(sx - 51, by - 39 + dive, 15, 1, '#7c8fb3');
+    // star roof sparkle
+    if (Math.floor(S.t * 3) % 2) R(sx - 60, by - 37 + dive, 1, 1, '#fff6c8');
+    // gold belt + grille + badge
+    R(sx - 76, by - 19, 74, 2, '#d9b45a');
+    R(sx - 4, by - 26, 4, 10, '#d9b45a'); R(sx - 3, by - 24, 2, 1, '#16151b'); R(sx - 3, by - 21, 2, 1, '#16151b');
+    R(sx - 40, by - 27, 6, 3, '#d9b45a');
+    // lights
+    R(sx - 3, by - 29, 3, 3, '#fff3b0');
+    const brakeLit = S.depth > 0.05 && !S.broken;
+    R(sx - 78, by - 29, 3, 7, brakeLit ? '#ff3b30' : '#6b1d1a');
+    if (brakeLit) { ctx.fillStyle = 'rgba(255,59,48,0.25)'; ctx.fillRect(sx - 90, by - 34, 12, 16); }
+    // wheels
+    for (const wx of [sx - 62, sx - 18]) {
+      R(wx - 7, by - 9, 14, 14, '#0a090d'); R(wx - 8, by - 7, 16, 10, '#0a090d');
+      R(wx - 4, by - 6, 8, 8, '#8a8f99');
+      const a = (S.x / 0.35) % (Math.PI * 2);
+      R(wx + Math.round(Math.cos(a) * 3) - 1, by - 2 + Math.round(Math.sin(a) * 3) - 1, 2, 2, '#16151b');
+      R(wx - 1, by - 3, 2, 2, '#d9b45a');
+    }
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(sx - 80, gy + 5, 84, 2);
+    // airbag on crash
+    if (S.ending === 'crash') { R(sx - 26, by - 38, 10, 12, '#f5f1e8'); R(sx - 28, by - 36, 14, 8, '#f5f1e8'); }
+  }
+
+  function drawPerson(x, y, coat) {
+    R(x + 2, y, 4, 4, '#e8c49a'); R(x + 2, y - 1, 4, 1, '#2b2230');
+    R(x + 1, y + 4, 6, 7, coat); R(x + 2, y + 11, 2, 5, '#2b2a3a'); R(x + 5, y + 11, 2, 5, '#2b2a3a');
+  }
+
+  function drawHazard() {
+    const hz = S.hz; if (!hz) return;
+    const x = sxOf(hz.x); if (x > W + 60 || x < -80) return;
+    const clearing = hz.state === 'clearing', t = hz.t;
+    if (hz.type !== 'car' && hz.type !== 'barrier') R(x, 182, 3, 56, '#efe6d2'); // stop line
+    if (hz.type === 'light') {
+      R(x + 8, 120, 3, 118, '#55515f'); R(x + 3, 112, 14, 32, '#111015');
+      R(x + 6, 115, 8, 8, clearing ? '#3a1414' : '#ff3b30');
+      R(x + 6, 125, 8, 8, '#3a2a10');
+      R(x + 6, 135, 8, 8, clearing ? '#3fdc6a' : '#123018');
+    } else if (hz.type === 'ped' || hz.type === 'ghost') {
+      for (let i = 0; i < 6; i++) R(x + 6 + i * 6, 182, 4, 56, 'rgba(239,230,210,0.55)');
+      if (hz.revealed) {
+        const py = clearing ? 200 - t * 26 : 200;
+        const step = Math.floor(S.t * 6) % 2;
+        if (py > 150) drawPerson(x + 14 + step, py, hz.type === 'ghost' ? '#3f7fd9' : '#c8553d');
+      }
+      if (hz.type === 'ghost') { R(x + 2, 152, 30, 26, '#e0ddd5'); R(x + 4, 156, 8, 6, '#3d4e6e'); R(x + 6, 176, 6, 4, '#111'); R(x + 22, 176, 6, 4, '#111'); }
+    } else if (hz.type === 'cat') {
+      const cx = clearing ? x + 10 + t * 80 : x + 10, cy = clearing ? 222 + t * 30 : 222;
+      if (cy < 240) { R(cx, cy, 10, 5, '#d98b3a'); R(cx + 8, cy - 4, 5, 5, '#d98b3a'); R(cx + 8, cy - 6, 1, 2, '#d98b3a'); R(cx + 12, cy - 6, 1, 2, '#d98b3a'); R(cx + 9, cy - 3, 1, 1, '#1b1430'); R(cx - 3, cy - 3, 3, 1, '#d98b3a'); }
+    } else if (hz.type === 'car') {
+      const bx = x + 2, gy = GROUND;
+      R(bx, gy - 28, 64, 20, '#d8d4cc'); R(bx + 8, gy - 38, 40, 10, '#d8d4cc');
+      R(bx + 12, gy - 36, 14, 6, '#3d4e6e'); R(bx + 30, gy - 36, 14, 6, '#3d4e6e');
+      R(bx, gy - 26, 3, 6, clearing ? '#6b1d1a' : '#ff3b30');
+      for (const wx of [bx + 14, bx + 50]) { R(wx - 6, gy - 8, 12, 12, '#0a090d'); R(wx - 3, gy - 5, 6, 6, '#8a8f99'); }
+    } else if (hz.type === 'barrier') {
+      for (let row = 0; row < 3; row++) for (let i = 0; i < 4 - row; i++) {
+        const bx = x + 2 + i * 13 + row * 6, by = 222 - row * 14;
+        R(bx, by, 12, 14, '#f08a24'); R(bx, by + 4, 12, 3, '#f5f1e8'); R(bx + 2, by - 1, 8, 1, '#c86a14');
+      }
+      R(x + 60, 150, 2, 80, '#55515f'); R(x + 50, 140, 26, 14, '#f5f1e8'); R(x + 52, 143, 22, 2, '#e2463c'); R(x + 52, 148, 22, 2, '#e2463c');
+    }
+  }
+
+  function drawParticles() {
+    for (const p of S.parts) {
+      if (p.cam || p.life <= 0) continue;
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.5));
+      R(sxOf(p.wx), p.y, p.s, p.s, p.c);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPedalCam() {
+    const px = 6, py = 6, w = 86, h = 62;
+    R(px - 2, py - 2, w + 4, h + 4, S.broken ? '#e2463c' : '#d9b45a');
+    R(px, py, w, h, '#0d0c12');
+    R(px, py + h - 10, w, 10, '#2d2338');
+    for (let i = 0; i < w; i += 4) R(px + i, py + h - 10, 2, 1, '#3c2f4a');
+    const pvx = px + 62, pvy = py + 12;
+    if (!S.broken) {
+      R(pvx - 8, py + 4, 16, 10, '#8a8f99'); R(pvx - 8, py + 4, 16, 2, '#b4b8c0');
+      const cracks = Math.min(S.heavy, 3);
+      if (cracks >= 1) { R(pvx - 6, py + 7, 3, 1, '#2a2731'); R(pvx - 4, py + 8, 2, 1, '#2a2731'); }
+      if (cracks >= 2) { R(pvx + 2, py + 6, 1, 3, '#2a2731'); R(pvx + 3, py + 9, 2, 1, '#2a2731'); }
+      if (cracks >= 3) { R(pvx - 2, py + 10, 5, 1, '#2a2731'); R(pvx - 1, py + 11, 1, 2, '#2a2731'); }
+      const a = -0.5 + S.depth * 0.65;
+      const ex = pvx + Math.sin(a) * 34, ey = pvy + Math.cos(a) * 34;
+      for (let i = 0; i <= 17; i++) R(pvx + (ex - pvx) * i / 17 - 1, pvy + (ey - pvy) * i / 17 - 1, 3, 3, '#5d606b');
+      R(pvx - 2, pvy - 2, 4, 4, '#d9b45a');
+      R(ex - 3, ey - 6, 4, 12, '#1a1a1f');
+      R(ex - 22, ey - 3, 18, 7, '#6b4a2e'); R(ex - 22, ey + 4, 18, 2, '#2a1c12'); R(ex - 30, ey - 7, 10, 8, '#3d4e6e');
+    } else {
+      R(pvx - 8, py + 4, 5, 6, '#8a8f99'); R(pvx + 4, py + 4, 4, 5, '#8a8f99');
+      R(pvx - 3, py + 8, 2, 2, '#2a2731');
+      for (let i = 0; i < 30; i++) R(px + 26 + i, py + h - 14 + Math.floor(i / 12), 3, 3, '#5d606b');
+      R(px + 54, py + h - 18, 4, 12, '#1a1a1f');
+      const fl = Math.floor(S.t * 10) % 2;
+      R(px + 20 + fl * 3, py + h - 18, 18, 7, '#6b4a2e'); R(px + 12 + fl * 3, py + h - 24, 10, 8, '#3d4e6e');
+      if (Math.floor(S.t * 4) % 2) { ctx.fillStyle = '#e2463c'; ctx.font = '8px "Press Start 2P", monospace'; ctx.fillText('!', px + 6, py + 6); }
+      for (const p of S.parts) if (p.cam) R(px + p.x * 0.9, py + p.y * 0.9, 2, 2, p.c);
+    }
+  }
+
+  function draw() {
+    ctx.save();
+    if (S.shake > 0 && !reduceMotion) ctx.translate(Math.round(rand(-S.shake, S.shake)), Math.round(rand(-S.shake, S.shake) * 0.5));
+    drawBackground();
+    drawHazard();
+    drawCar();
+    drawGuardrail();
+    drawParticles();
+    ctx.restore();
+    drawPedalCam();
+    if (S.slowT > 0) { ctx.fillStyle = 'rgba(226,70,60,0.18)'; ctx.fillRect(0, 0, W, H); }
+  }
+
+  // ---------- loop ----------
+  let last = performance.now(), acc = 0, hudTick = 0;
+  function frame(now) {
+    let dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (S.slowT > 0) { S.slowT -= dt; dt *= 0.25; }
+    acc += dt;
+    while (acc >= 1 / 120) { step(1 / 120); acc -= 1 / 120; }
+    draw(); updateAudio();
+    if ((hudTick = (hudTick + 1) % 3) === 0) updateHud();
+    requestAnimationFrame(frame);
+  }
+  renderSlots(); requestAnimationFrame(frame);
+
+  // ---------- input ----------
+  const brakeKeys = new Set(['Space', 'ArrowDown', 'KeyS']);
+  addEventListener('keydown', e => {
+    if (brakeKeys.has(e.code)) {
+      e.preventDefault();
+      if (S.phase === 'intro' || (S.phase === 'end' && !$('result').hidden)) return;
+      initAudio(); setPressing(true);
+    } else if (/^Digit[1-4]$/.test(e.code)) {
+      emergency(['hand', 'rail', 'park', 'shout'][+e.code.slice(5) - 1]);
+    } else if (e.code === 'Enter' && S.phase === 'intro') { e.preventDefault(); start(); }
+  });
+  addEventListener('keyup', e => { if (brakeKeys.has(e.code)) setPressing(false); });
+  addEventListener('blur', () => setPressing(false));
+
+  function bindHold(el) {
+    el.addEventListener('pointerdown', e => {
+      if (S.phase !== 'drive' && S.phase !== 'broken') return;
+      e.preventDefault(); initAudio(); try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      setPressing(true);
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, () => setPressing(false));
+  }
+  bindHold($('brake')); bindHold(cv);
+  $('brake').addEventListener('contextmenu', e => e.preventDefault());
+  $('emerg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) emergency(b.dataset.act); });
+  $('startBtn').addEventListener('click', start);
+})();
+</script>
+</body>
+</html>

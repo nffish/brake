@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="像素风娱乐小游戏：驾驶虚构的百万级 MPV，看踏板能撑过几脚重刹。">
 <style>*,*::before,*::after{box-sizing:border-box}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
-<title>第四脚</title>
+<title>尊贵V8000刹车测试</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=ZCOOL+QingKe+HuangYou&display=swap">
@@ -90,6 +90,8 @@ kbd { font: 9px var(--pixel); background: var(--panel); border: 2px solid var(--
 
 .controls { display: flex; flex-direction: column; gap: 10px; }
 #brake { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--panel); color: var(--paper); border: 4px solid var(--line); cursor: pointer; touch-action: none; position: relative; overflow: hidden; font-family: var(--body); font-size: 15px; text-align: left; }
+#brake::after { content: ''; position: absolute; left: 75%; top: 0; bottom: 0; width: 2px; background: var(--red); opacity: .6; pointer-events: none; }
+#brake .fill.max { background: rgba(226,70,60,.6); }
 #brake .fill { position: absolute; left: 0; bottom: 0; top: 0; width: 0%; background: rgba(226,70,60,.28); pointer-events: none; }
 #brake .pedal { width: 34px; height: 34px; flex: none; position: relative; image-rendering: pixelated; }
 #brake .pedal i { position: absolute; display: block; background: var(--paper); }
@@ -117,8 +119,8 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>第四脚</h1>
-      <span class="sub">尊贵 V8000 · 百万级旗舰 MPV 试驾体验</span>
+      <h1>尊贵V8000刹车测试</h1>
+      <span class="sub">百万级旗舰 MPV · 0–100 km/h 仅需 2.8 秒</span>
     </div>
     <div class="tools">
       <span class="global" id="globalBox" title="所有玩家的踏板断裂次数合计">全服累计断裂 <b id="globalBreaks">—</b> 次</span>
@@ -142,8 +144,8 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
       <div class="card">
         <h2>网传撑不过第四脚</h2>
         <p>欢迎试驾尊贵 V8000。星空顶、零重力座椅、香氛系统一应俱全。路上会遇到红灯、行人、急停的前车，请在停止线前把车停住。</p>
-        <p>按住 <kbd>空格</kbd> 或下方踏板踩刹车，按得越久踩得越深。踩深超过 75% 算一次<b>重刹</b>，踏板支架会记住每一次。</p>
-        <p class="hint">提示：轻踩更省支架，但停车距离更长。路边偶尔会有人突然冒出来。</p>
+        <p>按住 <kbd>空格</kbd> 或下方踏板踩刹车，按得越久踩得越深。踩深超过 75% 算一次<b>重刹</b>，踏板支架会记住每一次。<b>踩到底（100%）必断。</b></p>
+        <p class="hint">提示：别一直按着，点刹更安全，但停车距离更长。路边偶尔会有人突然冒出来。</p>
         <button class="btn" id="startBtn" type="button">开始试驾</button>
       </div>
     </div>
@@ -272,7 +274,7 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
       const gap = Math.max(0, hz.x - S.x);
       a.textContent = `前方：${NAMES[hz.type]} · ${Math.round(gap)}m`; a.dataset.alert = gap < 80 ? '1' : '0';
     } else { a.textContent = '前方：畅通'; a.dataset.alert = '0'; }
-    $('brakeFill').style.width = (S.depth * 100).toFixed(0) + '%';
+    $('brakeFill').style.width = (S.depth * 100).toFixed(0) + '%'; $('brakeFill').classList.toggle('max', S.depth > 0.9);
     $('brake').classList.toggle('on', S.pressing && !S.broken);
   }
 
@@ -301,6 +303,7 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
     const type = ghost ? 'ghost' : pick(['light', 'ped', 'cat', 'car']);
     S.hz = { type, x: S.x + (ghost ? rand(240, 300) : rand(170, 250)), state: 'active', t: 0, revealed: !ghost, vx: 0 };
   }
+  const ACCEL = (100 / 3.6) / 2.8; // 0–100 km/h in 2.8 s
   function target() { return Math.min(36, 22 + S.stops * 1.6); }
 
   function start() {
@@ -330,19 +333,21 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
     beep(180, 0.08, 0.04);
   }
 
-  function breakPedal() {
+  function breakPedal(floored) {
+    if (S.broken) return;
+    if (!S.pressCounted) { S.pressCounted = true; S.heavy++; }
     countBreak();
-    S.broken = true; S.phase = 'broken'; S.slowT = 1.4; S.shake = 8; S.stock = -10; S.cruise = S.v;
+    S.broken = true; S.phase = 'broken'; S.slowT = 1.4; S.shake = 8; S.stock = -10; S.coastA = S.v * S.v / (2 * 150);
     noise(0.12, 0.7, 4000); noise(0.35, 0.5, 300);
     renderSlots();
-    toast(`第 ${S.heavy} 脚：踏板支架断裂`, 'alert');
-    setTimeout(() => toast(`定速巡航将继续为您保持 ${Math.round(S.cruise * 3.6)} km/h`), 900);
+    toast(floored ? `踩到底了 · 第 ${S.heavy} 脚：踏板支架断裂` : `第 ${S.heavy} 脚：踏板支架断裂`, 'alert');
+    setTimeout(() => toast('车辆滑行中，预计 150 米后停下'), 900);
     const hz = S.hz;
     if (hz && hz.state === 'active' && hz.x - S.x < 220) {
       hz.type = 'barrier'; hz.revealed = true;
       setTimeout(() => toast('为照顾您的心理健康，前方障碍已替换为防撞桶', 'info'), 1800);
     } else {
-      S.hz = { type: 'barrier', x: S.x + Math.max(150, S.v * 6.5), state: 'active', t: 0, revealed: true, vx: 0 };
+      S.hz = { type: 'barrier', x: S.x + rand(110, 190), state: 'active', t: 0, revealed: true, vx: 0 };
     }
     // bracket debris
     for (let i = 0; i < 10; i++) S.parts.push({ cam: true, x: 66, y: 16, vx: rand(-30, 30), vy: rand(-40, -5), life: 1.4, c: '#8a8f99', s: 2 });
@@ -379,20 +384,21 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
 
   function step(dt) {
     S.t += dt;
-    if (S.pressing) S.depth = Math.min(1, S.depth + dt * 2.2); else S.depth = Math.max(0, S.depth - dt * 5);
+    if (S.pressing) S.depth = Math.min(1, S.depth + dt * 1.4); else S.depth = Math.max(0, S.depth - dt * 5);
     if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 14);
 
     if (S.phase === 'drive' || S.phase === 'broken') {
       let a;
       if (!S.broken) {
         if (S.pressing && S.depth > 0.75 && !S.pressCounted && S.v > 8) { S.pressCounted = true; onHeavy(); }
+        if (!S.broken && S.pressing && S.depth >= 1 && S.v > 1) breakPedal(true);
       }
       if (!S.broken) {
-        a = S.depth > 0.02 ? -(S.depth * 9.5 + 0.2) : (S.v < target() ? 2.4 : -0.4);
+        a = S.depth > 0.02 ? -(S.depth * 9.5 + 0.2) : (S.v < target() ? ACCEL : -0.4);
       } else {
         if (S.handDelay > 0) { S.handDelay -= dt; if (S.handDelay <= 0) { S.handOn = true; toast('电子手刹介入（温柔模式）'); } }
         const dec = (S.handOn ? 3.0 : 0) + (S.rail ? 5.2 : 0);
-        a = dec > 0 ? -dec : (S.v < S.cruise ? 1 : 0);
+        a = -(dec + S.coastA);
         if (S.rail) {
           S.cost += dt * (9000 + S.v * 500);
           if (S.v > 1 && Math.random() < 0.7) S.parts.push({ wx: S.x - rand(5, 35), y: GROUND + 12, vx: rand(-30, -8), vy: rand(-30, -5), life: rand(0.2, 0.5), c: pick(['#ffd34d', '#ff8a2a', '#fff']), s: 2, g: 1 });
@@ -408,7 +414,7 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
         if (hz.state === 'active') {
           if (!hz.revealed && gap < S.v * S.v / 12 + S.v * 0.5 + 6) { hz.revealed = true; toast('有人从路边冒出来了！', 'alert'); beep(880, 0.12); }
           if (gap < 0) { endGame(hz.type === 'barrier' ? 'crash' : 'violation'); S.x = hz.x; S.v = 0; }
-          else if (S.v < 0.3 && hz.revealed && gap < 70) {
+          else if (S.v < 0.3 && hz.revealed && (gap < 70 || hz.type === 'barrier')) {
             if (hz.type === 'barrier') endGame('survived');
             else {
               hz.state = 'clearing'; hz.t = 0; S.stops++; S.gaps.push(gap); S.stock += 0.3;
@@ -450,7 +456,7 @@ footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
     const desc = {
       violation: (viol[hz && hz.type] || '你冲过了停止线。') + ' 刹车距离不够，下次早点踩。',
       crash: '气囊已弹出。星空顶依然璀璨，香氛系统仍在工作。',
-      survived: `你靠${used.filter(u => u === '电子手刹' || u === '护栏').join('和') || '运气'}，让一台百万级 MPV 停在了防撞桶前。`,
+      survived: (used.some(u => u === '电子手刹' || u === '护栏') ? `你靠${used.filter(u => u === '电子手刹' || u === '护栏').join('和')}，让一台百万级 MPV 停在了防撞桶前。` : '你什么也没做，车自己滑了一段，刚好停在防撞桶前。'),
       gentle: '8 次停车，一脚重刹都没踩。原来豪车要这样开：别用力。',
       lucky: `重刹 ${S.heavy} 次，支架依然坚挺。建议顺路去买张彩票。`
     }[k];
